@@ -141,29 +141,55 @@ def find_borders(roads):
 
     points = np.array(points)
     vectors = []
-    
-    for i in range(0, len(points)-1):
-        vectors.append([distance.distance((points[i][0], 0), (points[i+1][0], 0)).m, distance.distance((0, points[i][1]), (0, points[i+1][1])).m])
 
-    vector_left = []
-    vector_right = []
     road_width = 5/2
-    for v in vectors:
-        left = np.array([-v[1], v[0]])
-        right = np.array([v[1],-v[0]])
-        vector_left.append(road_width/(np.linalg.norm(left))*left)
-        vector_right.append(road_width/(np.linalg.norm(right))*right)
-
     border_left = []
     border_right = []
+    print(points)
     for i in range(len(points)-1):
-        p = points[i]
-        border_left.append([p[0]+vector_left[i][0], p[1]+vector_left[i][1]])
-        border_right.append([p[0]+vector_right[i][0], p[1]+vector_right[i][1]])
+        p1 = points[i]
+        p2 = points[i+1]
 
-    plt.plot(*p)
-    plt.plot(*border_left)
-    plt.plot(*border_right)
+        # Vector between the current and the next point
+        v = np.array([p2[0]-p1[0], p2[1]-p1[1]])
+        # The distance between the two points, calculated in actual meters
+        vlen = distance.distance(p1, p2).m
+
+        # The relationship between the meter distance, and the vector norm
+        a = vlen/np.linalg.norm(v)
+        
+        # The two orthogonal vectors, scaled using a and the desired length as specified in road_width
+        # Two new points are made by adding the vectors to p1
+        left = np.array([-v[1], v[0]])
+        l = (road_width/a)*left/np.linalg.norm(left)
+        lp = (p1[0] + l[0], p1[1] + l[1])
+
+        right = np.array([v[1], -v[0]])
+        r = (road_width/a)*right/np.linalg.norm(right)
+        rp = (p1[0] + r[0], p1[1] + r[1])
+
+        border_left.append(lp)
+        border_right.append(rp)
+
+        # If this is the last iteration, add a point for the final point using the same orthogonal vectors as for n-1
+        if i == len(points)-2:
+            lp = (p2[0] + l[0], p2[1] + l[1])
+            rp = (p2[0] + r[0], p2[1] + r[1])
+
+            border_left.append(lp)
+            border_right.append(rp)
+
+    # A simple print of the calculated meter distance between the old and the generated points
+    print("Checking accuracy of generated points:")
+    for i in range(len(points)):
+        print("Point {}".format(i))
+        print("Left: {}".format(distance.distance(points[i], border_left[i]).m))
+        print("Right: {}".format(distance.distance(points[i], border_right[i]).m))
+        print("Left-right: {}".format(distance.distance(border_left[i], border_right[i]).m))
+
+    plt.plot(points, color="red")
+    plt.plot(border_left, color="green")
+    plt.plot(border_right, color="blue")
     plt.show()
         
 
