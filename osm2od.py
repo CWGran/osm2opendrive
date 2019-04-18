@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import math
 
 from xml.etree.ElementTree import ElementTree
 from xml.etree.ElementTree import Element
@@ -101,18 +102,12 @@ def buildXML(filename, roads):
         roadgeo.set("y", str(r.nodes[0].lat))
         roadgeo.set("z", "0")
 
-        # Calculate road length
-        length = 0
-        for i in range(len(r.nodes)-1):
-            p1 = r.nodes[i]
-            p2 = r.nodes[i+1]
-            
-            length += distance.distance((p1.lat, p1.lng), (p2.lat, p2.lng)).m
-
-        roadgeo.set("length", str(length))
+        roadgeo.set("length", str(road_length(r.nodes)))
 
         ps = SubElement(roadgeo, "pointSet")
 
+        # Not sure why these points are here as the reference line is supposed to be stored within <center>
+        # Need to look at an example
         # Use this if the first point should not be included
         # for i in range(1, len(r.nodes)):
         for n in r.nodes:
@@ -137,7 +132,7 @@ def buildXML(filename, roads):
 
         boundaries = SubElement(laneSec, "boundaries")
 
-        # If the lane number is odd and greater than 1, only care about lanes-1 lanes
+        # If the lane number is odd and greater than 1, only care about num_lanes-1 lanes
         if num_lanes > 1 and num_lanes % 2 != 0:
             num_lanes -= 1
 
@@ -164,17 +159,121 @@ def buildXML(filename, roads):
             lp = SubElement(leftb_geo_ps, "point")
             lp.set("x", str(left_boundary_points[i][0]))
             lp.set("y", str(left_boundary_points[i][1]))
+            lp.set("z", "0")
 
             # Right
             rp = SubElement(rightb_geo_ps, "point")
             rp.set("x", str(right_boundary_points[i][0]))
             rp.set("y", str(right_boundary_points[i][1]))
+            rp.set("z", "0")
 
+        # Center is supposed to store the reference line
+        # Left/right stores the borders of left/right lanes
 
+        center = SubElement(laneSec, "center")
+        center_lane = SubElement(center, "lane")
+
+        center_lane.set("id", "0")
+        center_lane.set("uid", "{}_0".format(r.id))
+        center_lane.set("type", "none")
+        center_lane.set("direction", "bidirection")
+        center_lane.set("turnType", "noTurn")   # Not sure what this means
+
+        center_line = SubElement(center_lane, "centerLine")
+        cl_geo = SubElement(center_line, "geometry")
+        cl_geo.set("sOffset", "0")
+        cl_geo.set("x", str(r.nodes[0].lng))
+        cl_geo.set("y", str(r.nodes[0].lat))
+        cl_geo.set("z", "0")
+        cl_geo.set("length", str(road_length(r.nodes)))
+
+        cl_geo_ps = SubElement(cl_geo, "pointSet")
+
+        for n in r.nodes:
+            p = SubElement(cl_geo_ps, "point")
+            p.set("x", str(n.lng))
+            p.set("y", str(n.lat))
+            p.set("z", "0")
+
+        right = SubElement(laneSec, "right")
+
+        if num_lanes > 1:
+            left = SubElement(laneSec, "left")
+
+        for i in range(math.ceil(num_lanes/2)):
+            # Right, only add this if num_lanes == 1
+            right_lane = SubElement(right, "lane")
+            right_lane.set("id", "{}".format(i+1))
+            right_lane.set("uid", "{}_0{}".format(r.id, i+1))
+            right_lane.set("type", "driving")
+            right_lane.set("direction", "bidirection" if num_lanes == 1 else "forward")
+            right_lane.set("turnType", "noTurn")    # Not sure what this means
+
+            right_border = SubElement(right_lane, "border")
+            right_border.set("virtual", "TRUE")     # "Identify whether the lane boundary exists in real world"
+
+            right_border_points = find_parallel(r.nodes, i*lane_width, True)
+
+            rb_geo = SubElement(right_border, "geometry")
+            rb_geo.set("sOffset", "0")
+            rb_geo.set("x", str(right_border_points[0][0]))
+            rb_geo.set("y", str(right_border_points[0][1]))
+            rb_geo.set("z", "0")
+            rb_geo.set("length", str(road_length(right_border_points)))
+
+            rb_geo_ps = SubElement(rb_geo, "pointSet")
+
+            for n in right_border_points:
+                p = SubElement(rb_geo_ps, "point")
+                p.set("x", str(n[0]))
+                p.set("y", str(n[1]))
+                p.set("z", "0")
+
+            if num_lanes > 1:
+                left_lane = SubElement(left, "lane")
+                left_lane.set("id", "-{}".format(i+1))
+                left_lane.set("uid", "{}_1{}".format(r.id, i+1))
+                left_lane.set("type", "driving")
+                left_lane.set("direction", "backward")
+                left_lane.set("turnType", "noTurn")    # Not sure what this means
+
+                left_border = SubElement(left_lane, "border")
+                left_border.set("virtual", "TRUE")     # "Identify whether the lane boundary exists in real world"
+
+                left_border_points = find_parallel(r.nodes, i*lane_width, False)
+
+                lb_geo = SubElement(left_border, "geometry")
+                lb_geo.set("sOffset", "0")
+                lb_geo.set("x", str(left_border_points[0][0]))
+                lb_geo.set("y", str(left_border_points[0][1]))
+                lb_geo.set("z", "0")
+                lb_geo.set("length", str(road_length(left_border_points)))
+
+                lb_geo_ps = SubElement(lb_geo, "pointSet")
+
+                for n in left_border_points:
+                    p = SubElement(lb_geo_ps, "point")
+                    p.set("x", str(n[0]))
+                    p.set("y", str(n[1]))
+                    p.set("z", "0")
         
     print("Done building, writing to '{}'".format(filename))
     tree.write(open('test.xml', 'w'), encoding='unicode')
 
+# Calculate road length
+def road_length(road):
+    length = 0
+    for i in range(len(road)-1):
+        p1 = road[i]
+        p2 = road[i+1]
+        
+        if isinstance(p1, Node):
+            length += distance.distance((p1.lat, p1.lng), (p2.lat, p2.lng)).m
+        else:
+            length += distance.distance(p1, p2).m
+
+    return length
+    
 def find_parallel(road, width, left):
     points = []
 
