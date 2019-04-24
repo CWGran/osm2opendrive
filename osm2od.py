@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+import datetime
 
 from xml.etree.ElementTree import ElementTree
 from xml.etree.ElementTree import Element
@@ -63,8 +64,12 @@ def readOSM(filename):
 
     return nodes, roads
 
+def format_coord(n):
+    return "{:.9E}".format(n)
+
 def buildXML(filename, roads):
 
+    name = filename.split(".")[0]
     filename = filename if filename.split(".")[-1] == ".xml" else "".join(filename.split(".")[0]) + ".xml"
     
     print("Building XML output...")
@@ -77,6 +82,13 @@ def buildXML(filename, roads):
     header.set("revMajor", "1")
     header.set("revMinor", "0")
     header.set("vendor", "Baidu")
+    header.set("name", name)
+    header.set("version", "1.0")
+    header.set("date", datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
+
+    # Maximum and minimum coordinate values
+    # North, south, east, west
+    max_coord = [None,None,None,None]
 
     # Setup Geo Reference
     georef = SubElement(header, "geoReference")
@@ -95,26 +107,28 @@ def buildXML(filename, roads):
 
         road.set("junction", "-1")
 
-        rv = SubElement(road, "routeView")
-        roadgeo = SubElement(rv, "geometry")
-        roadgeo.set("sOffset", "0")
-        roadgeo.set("x", str(r.nodes[0].lng))
-        roadgeo.set("y", str(r.nodes[0].lat))
-        roadgeo.set("z", "0")
+        # Routeview
+        # This is optional
+        #rv = SubElement(road, "routeView")
+        #roadgeo = SubElement(rv, "geometry")
+        #roadgeo.set("sOffset", "0")
+        #roadgeo.set("x", str(r.nodes[0].lng))
+        #roadgeo.set("y", str(r.nodes[0].lat))
+        #roadgeo.set("z", "0")
 
-        roadgeo.set("length", str(road_length(r.nodes)))
+        #roadgeo.set("length", str(road_length(r.nodes)))
 
-        ps = SubElement(roadgeo, "pointSet")
+        #ps = SubElement(roadgeo, "pointSet")
 
-        # Not sure why these points are here as the reference line is supposed to be stored within <center>
-        # Need to look at an example
-        # Use this if the first point should not be included
-        # for i in range(1, len(r.nodes)):
-        for n in r.nodes:
-            p = SubElement(ps, "point")
-            p.set("x", str(n.lng))
-            p.set("y", str(n.lat))
-            p.set("z", "0")
+        ## Not sure why these points are here as the reference line is supposed to be stored within <center>
+        ## Need to look at an example
+        ## Use this if the first point should not be included
+        ## for i in range(1, len(r.nodes)):
+        #for n in r.nodes:
+            #p = SubElement(ps, "point")
+            #p.set("x", str(n.lng))
+            #p.set("y", str(n.lat))
+            #p.set("z", "0")
 
         ##########
         #### Lanes
@@ -157,15 +171,15 @@ def buildXML(filename, roads):
         for i in range(len(r.nodes)):
             # Left
             lp = SubElement(leftb_geo_ps, "point")
-            lp.set("x", str(left_boundary_points[i][0]))
-            lp.set("y", str(left_boundary_points[i][1]))
-            lp.set("z", "0")
+            lp.set("x", format_coord(left_boundary_points[i][0]))
+            lp.set("y", format_coord(left_boundary_points[i][1]))
+            lp.set("z", format_coord(0.0))
 
             # Right
             rp = SubElement(rightb_geo_ps, "point")
-            rp.set("x", str(right_boundary_points[i][0]))
-            rp.set("y", str(right_boundary_points[i][1]))
-            rp.set("z", "0")
+            rp.set("x", format_coord(right_boundary_points[i][0]))
+            rp.set("y", format_coord(right_boundary_points[i][1]))
+            rp.set("z", format_coord(0.0))
 
         # Center is supposed to store the reference line
         # Left/right stores the borders of left/right lanes
@@ -182,18 +196,35 @@ def buildXML(filename, roads):
         center_line = SubElement(center_lane, "centerLine")
         cl_geo = SubElement(center_line, "geometry")
         cl_geo.set("sOffset", "0")
-        cl_geo.set("x", str(r.nodes[0].lng))
-        cl_geo.set("y", str(r.nodes[0].lat))
-        cl_geo.set("z", "0")
+        cl_geo.set("x", format_coord(r.nodes[0].lng))
+        cl_geo.set("y", format_coord(r.nodes[0].lat))
+        cl_geo.set("z", format_coord(0.0))
         cl_geo.set("length", str(road_length(r.nodes)))
 
         cl_geo_ps = SubElement(cl_geo, "pointSet")
 
         for n in r.nodes:
             p = SubElement(cl_geo_ps, "point")
-            p.set("x", str(n.lng))
-            p.set("y", str(n.lat))
-            p.set("z", "0")
+            p.set("x", format_coord(n.lng))
+            p.set("y", format_coord(n.lat))
+            p.set("z", format_coord(0.0))
+
+            # Check for min/max values:
+            # North
+            if max_coord[0] == None or max_coord[0] < n.lat:
+                max_coord[0] = n.lat
+
+            # South
+            if max_coord[1] == None or max_coord[1] > n.lat:
+                max_coord[1] = n.lat
+
+            # East
+            if max_coord[2] == None or max_coord[2] < n.lng:
+                max_coord[2] = n.lng
+
+            # West
+            if max_coord[3] == None or max_coord[3] > n.lng:
+                max_coord[3] = n.lng
 
         right = SubElement(laneSec, "right")
 
@@ -216,18 +247,18 @@ def buildXML(filename, roads):
 
             rb_geo = SubElement(right_border, "geometry")
             rb_geo.set("sOffset", "0")
-            rb_geo.set("x", str(right_border_points[0][0]))
-            rb_geo.set("y", str(right_border_points[0][1]))
-            rb_geo.set("z", "0")
+            rb_geo.set("x", format_coord(right_border_points[0][0]))
+            rb_geo.set("y", format_coord(right_border_points[0][1]))
+            rb_geo.set("z", format_coord(0.0))
             rb_geo.set("length", str(road_length(right_border_points)))
 
             rb_geo_ps = SubElement(rb_geo, "pointSet")
 
             for n in right_border_points:
                 p = SubElement(rb_geo_ps, "point")
-                p.set("x", str(n[0]))
-                p.set("y", str(n[1]))
-                p.set("z", "0")
+                p.set("x", format_coord(n[0]))
+                p.set("y", format_coord(n[1]))
+                p.set("z", format_coord(0.0))
 
             if num_lanes > 1:
                 left_lane = SubElement(left, "lane")
@@ -244,21 +275,25 @@ def buildXML(filename, roads):
 
                 lb_geo = SubElement(left_border, "geometry")
                 lb_geo.set("sOffset", "0")
-                lb_geo.set("x", str(left_border_points[0][0]))
-                lb_geo.set("y", str(left_border_points[0][1]))
-                lb_geo.set("z", "0")
+                lb_geo.set("x", format_coord(left_border_points[0][0]))
+                lb_geo.set("y", format_coord(left_border_points[0][1]))
+                lb_geo.set("z", format_coord(0.0))
                 lb_geo.set("length", str(road_length(left_border_points)))
 
                 lb_geo_ps = SubElement(lb_geo, "pointSet")
 
                 for n in left_border_points:
                     p = SubElement(lb_geo_ps, "point")
-                    p.set("x", str(n[0]))
-                    p.set("y", str(n[1]))
-                    p.set("z", "0")
+                    p.set("x", format_coord(n[0]))
+                    p.set("y", format_coord(n[1]))
+                    p.set("z", format_coord(0.0))
         
+    header.set("north", format_coord(max_coord[0]))
+    header.set("south", format_coord(max_coord[1]))
+    header.set("east", format_coord(max_coord[2]))
+    header.set("west", format_coord(max_coord[3]))
     print("Done building, writing to '{}'".format(filename))
-    tree.write(open('test.xml', 'w'), encoding='unicode')
+    tree.write(open(filename, 'w'), encoding='unicode')
 
 # Calculate road length
 def road_length(road):
@@ -327,8 +362,7 @@ def main():
         filename = args.file
 
     nodes, roads = readOSM(filename)
-    #find_parallel(roads)
-    buildXML("test", roads)
+    buildXML(filename, roads)
 
 
 if __name__ == "__main__":
