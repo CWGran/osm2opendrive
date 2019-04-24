@@ -70,7 +70,7 @@ def format_coord(n):
 def buildXML(filename, roads):
 
     name = filename.split(".")[0]
-    filename = filename if filename.split(".")[-1] == ".xml" else "".join(filename.split(".")[0]) + ".xml"
+    filename = name + ".xml"
     
     print("Building XML output...")
 
@@ -234,8 +234,8 @@ def buildXML(filename, roads):
         for i in range(math.ceil(num_lanes/2)):
             # Right, only add this if num_lanes == 1
             right_lane = SubElement(right, "lane")
-            right_lane.set("id", "{}".format(i+1))
-            right_lane.set("uid", "{}_0{}".format(r.id, i+1))
+            right_lane.set("id", "-{}".format(i+1))
+            right_lane.set("uid", "{}_1{}".format(r.id, i+1))
             right_lane.set("type", "driving")
             right_lane.set("direction", "bidirection" if num_lanes == 1 else "forward")
             right_lane.set("turnType", "noTurn")    # Not sure what this means
@@ -262,8 +262,8 @@ def buildXML(filename, roads):
 
             if num_lanes > 1:
                 left_lane = SubElement(left, "lane")
-                left_lane.set("id", "-{}".format(i+1))
-                left_lane.set("uid", "{}_1{}".format(r.id, i+1))
+                left_lane.set("id", "{}".format(i+1))
+                left_lane.set("uid", "{}_0{}".format(r.id, i+1))
                 left_lane.set("type", "driving")
                 left_lane.set("direction", "backward")
                 left_lane.set("turnType", "noTurn")    # Not sure what this means
