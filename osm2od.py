@@ -25,14 +25,25 @@ def readNodes(e):
 
 def readRoads(e, nodes):
     roads = []
+    driveable = ["motorway", "trunk", "primary", "secondary", "tertiary", "residential", "service", "living_street", "track", "road", "unclassified"]
+    for r in driveable.copy():
+        driveable.append(r + "_link")
 
     # Read all roads/ways into an array
     for road in e.findall('way'):
         r = Road(road.get("id"))
 
+        supp = False
+
         # Read all information about each road
         for tag in road.findall('tag'):
             setattr(r, tag.get("k"), tag.get("v"))
+
+            if tag.get('k') == "highway":
+                if tag.get('v') in driveable:
+                    supp = True
+        if not supp:
+            continue
         
         # Connect to the nodes
         for nd in road.findall('nd'):
@@ -55,7 +66,7 @@ def readOSM(filename):
     return nodes, roads
 
 def format_coord(n):
-    return "{:.9E}".format(n)
+    return "{:.9e}".format(n)
 
 def buildXML(filename, roads, pretty):
 
@@ -66,6 +77,7 @@ def buildXML(filename, roads, pretty):
     print("Building XML output...")
 
     root = etree.Element('OpenDRIVE')
+    root.set("xmlns", "http://www.opendrive.org")
     tree = etree.ElementTree(root)
 
     # Setup header record
@@ -181,11 +193,12 @@ def buildXML(filename, roads, pretty):
         center_lane.set("id", "0")
         center_lane.set("uid", "{}_0".format(r.id))
         center_lane.set("type", "none")
-        center_lane.set("direction", "bidirection")
-        center_lane.set("turnType", "noTurn")   # Not sure what this means
+        #center_lane.set("direction", "bidirection")
+        #center_lane.set("turnType", "noTurn")   # Not sure what this means
 
-        center_line = etree.SubElement(center_lane, "centerLine")
-        cl_geo = etree.SubElement(center_line, "geometry")
+        center_border = etree.SubElement(center_lane, "border")
+        center_border.set("virtual", "TRUE")
+        cl_geo = etree.SubElement(center_border, "geometry")
         cl_geo.set("sOffset", "0")
         cl_geo.set("x", format_coord(r.nodes[0].lng))
         cl_geo.set("y", format_coord(r.nodes[0].lat))
@@ -231,6 +244,28 @@ def buildXML(filename, roads, pretty):
             right_lane.set("direction", "bidirection" if num_lanes == 1 else "forward")
             right_lane.set("turnType", "noTurn")    # Not sure what this means
 
+            # Lane center
+            right_center = etree.SubElement(right_lane, "centerLine")
+                
+            center_pos = (i-1)*lane_width+(lane_width/2)
+            right_center_points = find_parallel(r.nodes, center_pos, True)
+
+            rc_geo = etree.SubElement(right_center, "geometry")
+            rc_geo.set("sOffset", "0")
+            rc_geo.set("x", format_coord(right_center_points[0][0]))
+            rc_geo.set("y", format_coord(right_center_points[0][1]))
+            rc_geo.set("z", format_coord(0.0))
+            rc_geo.set("length", str(road_length(right_center_points)))
+
+            rc_geo_ps = etree.SubElement(rc_geo, "pointSet")
+
+            for n in right_center_points:
+                p = etree.SubElement(rc_geo_ps, "point")
+                p.set("x", format_coord(n[0]))
+                p.set("y", format_coord(n[1]))
+                p.set("z", format_coord(0.0))
+
+            # Lane border
             right_border = etree.SubElement(right_lane, "border")
             right_border.set("virtual", "TRUE")     # "Identify whether the lane boundary exists in real world"
 
@@ -259,6 +294,28 @@ def buildXML(filename, roads, pretty):
                 left_lane.set("direction", "backward")
                 left_lane.set("turnType", "noTurn")    # Not sure what this means
 
+                # Lane center
+                left_center = etree.SubElement(left_lane, "centerLine")
+                    
+                center_pos = (i-1)*lane_width+(lane_width/2)
+                left_center_points = find_parallel(r.nodes, center_pos, False)
+
+                lc_geo = etree.SubElement(left_center, "geometry")
+                lc_geo.set("sOffset", "0")
+                lc_geo.set("x", format_coord(left_center_points[0][0]))
+                lc_geo.set("y", format_coord(left_center_points[0][1]))
+                lc_geo.set("z", format_coord(0.0))
+                lc_geo.set("length", str(road_length(left_center_points)))
+
+                lc_geo_ps = etree.SubElement(lc_geo, "pointSet")
+
+                for n in left_center_points:
+                    p = etree.SubElement(lc_geo_ps, "point")
+                    p.set("x", format_coord(n[0]))
+                    p.set("y", format_coord(n[1]))
+                    p.set("z", format_coord(0.0))
+
+                # Lane border
                 left_border = etree.SubElement(left_lane, "border")
                 left_border.set("virtual", "TRUE")     # "Identify whether the lane boundary exists in real world"
 
