@@ -58,9 +58,9 @@ def readRoads(e, nodes):
     return roads
 
 def readOSM(filename):
-    e = etree.parse('osmmaps/{}'.format(filename)).getroot()
+    e = etree.parse(filename).getroot()
 
-    print("Reading file osmmaps/{}".format(filename))
+    print("Reading file {}".format(filename))
 
     nodes = readNodes(e)
     roads = readRoads(e, nodes)
