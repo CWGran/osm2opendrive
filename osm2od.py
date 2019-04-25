@@ -7,6 +7,7 @@ import argparse
 from geopy import distance
 from scipy.optimize import curve_fit
 from lxml import etree
+from tqdm import tqdm
 
 from road import Node, Road
 
@@ -25,6 +26,8 @@ def readNodes(e):
 
 def readRoads(e, nodes):
     roads = []
+
+    # Desired road types
     driveable = ["motorway", "trunk", "primary", "secondary", "tertiary", "residential", "service", "living_street", "track", "road", "unclassified"]
     for r in driveable.copy():
         driveable.append(r + "_link")
@@ -33,16 +36,17 @@ def readRoads(e, nodes):
     for road in e.findall('way'):
         r = Road(road.get("id"))
 
-        supp = False
+        supported = False
 
         # Read all information about each road
         for tag in road.findall('tag'):
             setattr(r, tag.get("k"), tag.get("v"))
 
+            # Filter out unwanted roads
             if tag.get('k') == "highway":
                 if tag.get('v') in driveable:
-                    supp = True
-        if not supp:
+                    supported = True
+        if not supported:
             continue
         
         # Connect to the nodes
@@ -98,7 +102,7 @@ def buildXML(filename, roads, pretty):
     # TODO: Get CDATA working with ElementTree, or switch to lxml.etree
     georef.text = etree.CDATA("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
 
-    for r in roads:
+    for r in tqdm(roads):
         road = etree.SubElement(root, "road")
 
         if hasattr(r, "name"):
@@ -340,7 +344,8 @@ def buildXML(filename, roads, pretty):
     header.set("south", format_coord(max_coord[1]))
     header.set("east", format_coord(max_coord[2]))
     header.set("west", format_coord(max_coord[3]))
-    print("Done building, writing to '{}'".format(filename))
+
+    print("XML successfully generated, writing to '{}'".format(filename))
 
     tree.write(filename, xml_declaration=True, pretty_print=pretty, encoding='UTF-8')
 
@@ -404,6 +409,8 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('file', help="Input filename")
+    parser.add_argument('--pretty', '-p', action='store_true', help="Prettify output")
+    parser.set_defaults(pretty=False)
 
     args = parser.parse_args()
 
@@ -411,7 +418,7 @@ def main():
         filename = args.file
 
     nodes, roads = readOSM(filename)
-    buildXML(filename, roads, True)
+    buildXML(filename, roads, args.pretty)
 
 
 if __name__ == "__main__":
