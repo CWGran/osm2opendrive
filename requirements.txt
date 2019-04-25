@@ -1,1 +1,3 @@
-geopy
+numpy
+argparse
+tqdm

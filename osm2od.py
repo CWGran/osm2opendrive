@@ -1,11 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import math
 import datetime
 import argparse
 
 from geopy import distance
-from scipy.optimize import curve_fit
 from lxml import etree
 from tqdm import tqdm
 
