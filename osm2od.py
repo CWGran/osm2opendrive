@@ -396,13 +396,12 @@ def find_parallel(road, width, left):
             p0 = points[i-1]
             v0 = np.array([p1[0]-p0[0], p1[1]-p0[1]])
             
-            # lv0 = np.array([-v0[1], v0[0]]) if left else np.array([v0[1], -v0[0]])
-            # lv = np.array([lv[0] + lv0[0], lv0[1] + lv0[1]])
-
             angle = vector_angle(v0, v)
-            angle = math.pi + angle
-
-            transf_angle = angle
+            angle = (math.pi - abs(angle))*angle/abs(angle)
+            if angle > 0:
+                angle = angle-2*math.pi
+            
+            transf_angle = angle/2.0
             v_x = math.cos(transf_angle) * v[0] - math.sin(transf_angle) * v[1]
             v_y = math.sin(transf_angle) * v[0] + math.cos(transf_angle) * v[1]
             lv = np.array([v_x, v_y])
@@ -439,16 +438,6 @@ def main():
 
     nodes, roads = readOSM(filename)
     buildXML(filename, roads, args.pretty)
-
-    v1 = np.array([0,-2])
-    v2 = np.array([1,-2])
-
-    angle = vector_angle(v1, v2)
-    print(angle)
-    print(math.pi-angle)
-    transf_angle= -vector_angle(v1, v2)/2.0
-    lv = np.array([v2[0] * np.cos(transf_angle) - v2[1] * np.sin(transf_angle), v2[0] * np.sin(transf_angle) + v2[1] * np.cos(transf_angle)])
-    print(lv)
 
 
 if __name__ == "__main__":
