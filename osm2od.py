@@ -2,6 +2,7 @@ import numpy as np
 import math
 import datetime
 import argparse
+import utm
 
 from geopy import distance
 from lxml import etree
@@ -150,7 +151,7 @@ def buildXML(filename, roads, pretty):
         
         nodes = []
         for n in r.nodes:
-            nodes.append([n.lng, n.lat])
+            nodes.append([n.lat, n.lng])
 
         if num_lanes == 1:
             left_boundary_points = nodes
@@ -163,14 +164,14 @@ def buildXML(filename, roads, pretty):
         for i in range(len(r.nodes)):
             # Left
             lp = etree.SubElement(leftb_geo_ps, "point")
-            lp.set("x", format_coord(left_boundary_points[i][0]))
-            lp.set("y", format_coord(left_boundary_points[i][1]))
+            lp.set("x", format_coord(left_boundary_points[i][1]))
+            lp.set("y", format_coord(left_boundary_points[i][0]))
             lp.set("z", format_coord(0.0))
 
             # Right
             rp = etree.SubElement(rightb_geo_ps, "point")
-            rp.set("x", format_coord(right_boundary_points[i][0]))
-            rp.set("y", format_coord(right_boundary_points[i][1]))
+            rp.set("x", format_coord(right_boundary_points[i][1]))
+            rp.set("y", format_coord(right_boundary_points[i][0]))
             rp.set("z", format_coord(0.0))
 
         # Center is supposed to store the reference line
@@ -199,26 +200,26 @@ def buildXML(filename, roads, pretty):
         center_nodes = nodes if num_lanes > 1 else find_parallel(r.nodes, lane_width/2.0, True)
         for n in center_nodes:
             p = etree.SubElement(cl_geo_ps, "point")
-            p.set("x", format_coord(n[0]))
-            p.set("y", format_coord(n[1]))
+            p.set("x", format_coord(n[1]))
+            p.set("y", format_coord(n[0]))
             p.set("z", format_coord(0.0))
 
             # Check for min/max values:
             # North
-            if max_coord[0] == None or max_coord[0] < n[1]:
-                max_coord[0] = n[1]
+            if max_coord[0] == None or max_coord[0] < n[0]:
+                max_coord[0] = n[0]
 
             # South
-            if max_coord[1] == None or max_coord[1] > n[1]:
-                max_coord[1] = n[1]
+            if max_coord[1] == None or max_coord[1] > n[0]:
+                max_coord[1] = n[0]
 
             # East
-            if max_coord[2] == None or max_coord[2] < n[0]:
-                max_coord[2] = n[0]
+            if max_coord[2] == None or max_coord[2] < n[1]:
+                max_coord[2] = n[1]
 
             # West
-            if max_coord[3] == None or max_coord[3] > n[0]:
-                max_coord[3] = n[0]
+            if max_coord[3] == None or max_coord[3] > n[1]:
+                max_coord[3] = n[1]
 
         right = etree.SubElement(laneSec, "right")
 
@@ -245,8 +246,8 @@ def buildXML(filename, roads, pretty):
 
             rc_geo = etree.SubElement(right_center, "geometry")
             rc_geo.set("sOffset", "0")
-            rc_geo.set("x", format_coord(right_center_points[0][0]))
-            rc_geo.set("y", format_coord(right_center_points[0][1]))
+            rc_geo.set("x", format_coord(right_center_points[0][1]))
+            rc_geo.set("y", format_coord(right_center_points[0][0]))
             rc_geo.set("z", format_coord(0.0))
             rc_geo.set("length", str(road_length(right_center_points)))
 
@@ -254,8 +255,8 @@ def buildXML(filename, roads, pretty):
 
             for n in right_center_points:
                 p = etree.SubElement(rc_geo_ps, "point")
-                p.set("x", format_coord(n[0]))
-                p.set("y", format_coord(n[1]))
+                p.set("x", format_coord(n[1]))
+                p.set("y", format_coord(n[0]))
                 p.set("z", format_coord(0.0))
 
             # Lane border
@@ -263,14 +264,14 @@ def buildXML(filename, roads, pretty):
             right_border.set("virtual", "TRUE")     # "Identify whether the lane boundary exists in real world"
 
             if num_lanes == 1:
-                right_border_points = find_parallel(r.nodes, lane_width/2, False)
+                right_border_points = find_parallel(r.nodes, lane_width/2.0, False)
             else:
                 right_border_points = find_parallel(r.nodes, (i+1)*lane_width, False)
 
             rb_geo = etree.SubElement(right_border, "geometry")
             rb_geo.set("sOffset", "0")
-            rb_geo.set("x", format_coord(right_border_points[0][0]))
-            rb_geo.set("y", format_coord(right_border_points[0][1]))
+            rb_geo.set("x", format_coord(right_border_points[0][1]))
+            rb_geo.set("y", format_coord(right_border_points[0][0]))
             rb_geo.set("z", format_coord(0.0))
             rb_geo.set("length", str(road_length(right_border_points)))
 
@@ -278,8 +279,8 @@ def buildXML(filename, roads, pretty):
 
             for n in right_border_points:
                 p = etree.SubElement(rb_geo_ps, "point")
-                p.set("x", format_coord(n[0]))
-                p.set("y", format_coord(n[1]))
+                p.set("x", format_coord(n[1]))
+                p.set("y", format_coord(n[0]))
                 p.set("z", format_coord(0.0))
 
             if num_lanes > 1:
@@ -297,8 +298,8 @@ def buildXML(filename, roads, pretty):
 
                 lc_geo = etree.SubElement(left_center, "geometry")
                 lc_geo.set("sOffset", "0")
-                lc_geo.set("x", format_coord(left_center_points[0][0]))
-                lc_geo.set("y", format_coord(left_center_points[0][1]))
+                lc_geo.set("x", format_coord(left_center_points[0][1]))
+                lc_geo.set("y", format_coord(left_center_points[0][0]))
                 lc_geo.set("z", format_coord(0.0))
                 lc_geo.set("length", str(road_length(left_center_points)))
 
@@ -306,8 +307,8 @@ def buildXML(filename, roads, pretty):
 
                 for n in left_center_points:
                     p = etree.SubElement(lc_geo_ps, "point")
-                    p.set("x", format_coord(n[0]))
-                    p.set("y", format_coord(n[1]))
+                    p.set("x", format_coord(n[1]))
+                    p.set("y", format_coord(n[0]))
                     p.set("z", format_coord(0.0))
 
                 # Lane border
@@ -318,8 +319,8 @@ def buildXML(filename, roads, pretty):
 
                 lb_geo = etree.SubElement(left_border, "geometry")
                 lb_geo.set("sOffset", "0")
-                lb_geo.set("x", format_coord(left_border_points[0][0]))
-                lb_geo.set("y", format_coord(left_border_points[0][1]))
+                lb_geo.set("x", format_coord(left_border_points[0][1]))
+                lb_geo.set("y", format_coord(left_border_points[0][0]))
                 lb_geo.set("z", format_coord(0.0))
                 lb_geo.set("length", str(road_length(left_border_points)))
 
@@ -327,8 +328,8 @@ def buildXML(filename, roads, pretty):
 
                 for n in left_border_points:
                     p = etree.SubElement(lb_geo_ps, "point")
-                    p.set("x", format_coord(n[0]))
-                    p.set("y", format_coord(n[1]))
+                    p.set("x", format_coord(n[1]))
+                    p.set("y", format_coord(n[0]))
                     p.set("z", format_coord(0.0))
         
     header.set("north", format_coord(max_coord[0]))
@@ -371,27 +372,26 @@ def find_parallel(road, width, left):
         #points.append((road.nodes[i].lng, road.nodes[i].lat))
 
     for n in road:
-        points.append((n.lng, n.lat))
+        points.append((n.lat, n.lng))
 
     points = np.array(points)
     vectors = []
 
     parallel = []
     for i in range(len(points)-1):
-        p1 = points[i]
-        p2 = points[i+1]
+        p1 = utm.from_latlon(*points[i])
+        p2 = utm.from_latlon(*points[i+1])
 
         # Vector between the current and the next point
         v = np.array([p2[0]-p1[0], p2[1]-p1[1]])
         # The distance between the two points, calculated in actual meters
-        vlen = distance.distance(p1, p2).m
+        #vlen = distance.distance(distance.lonlat(*p1), distance.lonlat(*p2)).m
 
         # The relationship between the meter distance, and the vector norm
-        a = vlen/np.linalg.norm(v)
+        #a = vlen/np.linalg.norm(v)
 
         # The two orthogonal vectors, scaled using a and the desired length as specified in width
         # Two new points are made by adding the vectors to p1
-        lv = np.array([v[1], -v[0]])
         if i != 0:
             p0 = points[i-1]
             v0 = np.array([p1[0]-p0[0], p1[1]-p0[1]])
@@ -405,21 +405,27 @@ def find_parallel(road, width, left):
             v_x = math.cos(transf_angle) * v[0] - math.sin(transf_angle) * v[1]
             v_y = math.sin(transf_angle) * v[0] + math.cos(transf_angle) * v[1]
             lv = np.array([v_x, v_y])
+        else:
+            lv = np.array([v[1], -v[0]])/np.linalg.norm(v)
+        lv = np.array([v[1], -v[0]])/np.linalg.norm(v)
 
-        l = (width/a)*lv/np.linalg.norm(lv)
+        l = width*lv/np.linalg.norm(lv)
         if left:
             lp = (p1[0] - l[0], p1[1] - l[1])
         else:
             lp = (p1[0] + l[0], p1[1] + l[1])
 
+        lp = utm.to_latlon(lp[0], lp[1], 32, 'V')
         parallel.append(lp)
 
         # If this is the last iteration, add a point for the final point using the same orthogonal vectors as for n-1
         if i == len(points)-2:
             lv = np.array([-v[1], v[0]]) if left else np.array([v[1], -v[0]])
-            l = (width/a)*lv/np.linalg.norm(lv)
+            lv = lv/np.linalg.norm(v)
+            l = width*lv/np.linalg.norm(lv)
             lp = (p2[0] + l[0], p2[1] + l[1])
 
+            lp = utm.to_latlon(lp[0], lp[1], 32, 'V')
             parallel.append(lp)
     
     return parallel
