@@ -379,35 +379,28 @@ def find_parallel(road, width, left):
 
     parallel = []
     for i in range(len(points)-1):
+        # Convert the points to UTM coordinates
         p1 = utm.from_latlon(*points[i])
         p2 = utm.from_latlon(*points[i+1])
 
         # Vector between the current and the next point
         v = np.array([p2[0]-p1[0], p2[1]-p1[1]])
-        # The distance between the two points, calculated in actual meters
-        #vlen = distance.distance(distance.lonlat(*p1), distance.lonlat(*p2)).m
-
-        # The relationship between the meter distance, and the vector norm
-        #a = vlen/np.linalg.norm(v)
 
         # The two orthogonal vectors, scaled using a and the desired length as specified in width
         # Two new points are made by adding the vectors to p1
         if i != 0:
-            p0 = points[i-1]
+            p0 = utm.from_latlon(*points[i-1])
             v0 = np.array([p1[0]-p0[0], p1[1]-p0[1]])
             
             angle = vector_angle(v0, v)
-            angle = (math.pi - abs(angle))*angle/abs(angle)
-            if angle > 0:
-                angle = angle-2*math.pi
+            angle = math.pi + angle
             
-            transf_angle = angle/2.0
-            v_x = math.cos(transf_angle) * v[0] - math.sin(transf_angle) * v[1]
-            v_y = math.sin(transf_angle) * v[0] + math.cos(transf_angle) * v[1]
+            angle = -angle/2.0
+            v_x = math.cos(angle) * v[0] - math.sin(angle) * v[1]
+            v_y = math.sin(angle) * v[0] + math.cos(angle) * v[1]
             lv = np.array([v_x, v_y])
         else:
-            lv = np.array([v[1], -v[0]])/np.linalg.norm(v)
-        lv = np.array([v[1], -v[0]])/np.linalg.norm(v)
+            lv = np.array([v[1], -v[0]])
 
         l = width*lv/np.linalg.norm(lv)
         if left:
@@ -444,7 +437,6 @@ def main():
 
     nodes, roads = readOSM(filename)
     buildXML(filename, roads, args.pretty)
-
 
 if __name__ == "__main__":
     main()
