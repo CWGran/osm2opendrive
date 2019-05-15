@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from road import Node, Road
 
+utmz = {"zone":32, "letter":"V", "full":"32V"}
 
 def readNodes(e):
     nodes = {}
@@ -17,12 +18,7 @@ def readNodes(e):
     # Read all nodes and their coordinates into an array
     for node in e.findall('node'):
         n = Node(node.get("id"), node.get("lat"), node.get("lon"))
-
         nodes[node.get("id")] = n
-        
-        if node.get("id") == "78272":
-            print("Node {}, lat = {}, lon = {}".format(node.get("id"), node.get("lat"), node.get("lon")))
-
     return nodes
 
 
@@ -76,7 +72,7 @@ def format_coord(n):
 
 def buildXML(filename, roads, pretty):
 
-    name = filename.split(".")[0]
+    name = filename.split(".")[0].split("/")[-1]
     #filename = name + ".xml"
     filename = "base_map.xml"
     
@@ -362,14 +358,10 @@ def vector_angle(v1, v2):
     dot = np.dot(v1_u, v2_u)
     det = v1_u[0]*v2_u[1] - v1_u[1]*v2_u[0]
 
-    #return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
     return np.arctan2(det, dot)
 
 def find_parallel(road, width, left):
     points = []
-
-    #for i in range(0, 3):
-        #points.append((road.nodes[i].lng, road.nodes[i].lat))
 
     for n in road:
         points.append((n.lat, n.lng))
@@ -386,32 +378,37 @@ def find_parallel(road, width, left):
         # Vector between the current and the next point
         v = np.array([p2[0]-p1[0], p2[1]-p1[1]])
 
-        # The two orthogonal vectors, scaled using a and the desired length as specified in width
-        # Two new points are made by adding the vectors to p1
         if i != 0:
+            # If the point is not the first or last point, use both the previous and the next
+            # points to calculate the new point
             p0 = utm.from_latlon(*points[i-1])
             v0 = np.array([p1[0]-p0[0], p1[1]-p0[1]])
             
+            # Find  angle between vectors
             angle = vector_angle(v0, v)
             angle = math.pi + angle
-            
             angle = -angle/2.0
+
+            # Make a new point based on the second vector and the calculated angle
             v_x = math.cos(angle) * v[0] - math.sin(angle) * v[1]
             v_y = math.sin(angle) * v[0] + math.cos(angle) * v[1]
             lv = np.array([v_x, v_y])
         else:
+            # If the point is the first point, only use the next point to calculate
             lv = np.array([v[1], -v[0]])
 
+        # Move the new point correctly represent the road's width
         l = width*lv/np.linalg.norm(lv)
         if left:
             lp = (p1[0] - l[0], p1[1] - l[1])
         else:
             lp = (p1[0] + l[0], p1[1] + l[1])
 
-        lp = utm.to_latlon(lp[0], lp[1], 32, 'V')
+        # Convert back to lat/long and append to the line
+        lp = utm.to_latlon(lp[0], lp[1], utmz["zone"], utmz["letter"])
         parallel.append(lp)
 
-        # If this is the last iteration, add a point for the final point using the same orthogonal vectors as for n-1
+        # If this is the last iteration, add a point for the final point by using the two last points
         if i == len(points)-2:
             lv = np.array([-v[1], v[0]]) if left else np.array([v[1], -v[0]])
             lv = lv/np.linalg.norm(v)
@@ -424,9 +421,12 @@ def find_parallel(road, width, left):
     return parallel
 
 def main():
+    global utmz
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('file', help="Input filename")
+    parser.add_argument('--zone', '-z', action="store", type=str)
     parser.add_argument('--pretty', '-p', action='store_true', help="Prettify output")
     parser.set_defaults(pretty=False)
 
@@ -434,6 +434,22 @@ def main():
 
     if args.file:
         filename = args.file
+
+    if args.zone:
+        try:
+            gz = args.zone
+            utmz["zone"] = int(gz[0:-1])
+            utmz["letter"] = upper(str(gz[-1]))
+            utmz["full"] = gz
+
+            if utmz["zone"] > 60 or utmz["zone"] < 1:
+                raise ValueError("Zone number out of range, must be between 1 and 60")
+            
+            if not utmz["letter"].isalpha() or utmz["letter"] in ["A", "B", "Y", "Z"]:
+                raise ValueError("Zone letter out of range, must be between C and X")
+
+        except (TypeError, ValueError) as e:
+            print("Erroneous UTM zone \"{}\", using default \"{}\".".format(args.zone, utmz["full"]))
 
     nodes, roads = readOSM(filename)
     buildXML(filename, roads, args.pretty)

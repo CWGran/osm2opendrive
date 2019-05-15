@@ -2,3 +2,4 @@ numpy
 argparse
 tqdm
 utm
+geopy
