@@ -393,12 +393,16 @@ def find_parallel(road, width, left):
             v_x = math.cos(angle) * v[0] - math.sin(angle) * v[1]
             v_y = math.sin(angle) * v[0] + math.cos(angle) * v[1]
             lv = np.array([v_x, v_y])
+
+            # Scale width to maintain the lane width at sharp angles
+            scaled_width = abs(width/np.sin(angle))
         else:
             # If the point is the first point, only use the next point to calculate
             lv = np.array([v[1], -v[0]])
+            scaled_width = width
 
         # Move the new point correctly represent the road's width
-        l = width*lv/np.linalg.norm(lv)
+        l = scaled_width*lv/np.linalg.norm(lv)
         if left:
             lp = (p1[0] - l[0], p1[1] - l[1])
         else:
