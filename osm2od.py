@@ -100,6 +100,7 @@ def buildXML(filename, roads, pretty):
     # TODO: Get CDATA working with ElementTree, or switch to lxml.etree
     georef.text = etree.CDATA("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
 
+    junctions = {}
     for r in tqdm(roads):
         road = etree.SubElement(root, "road")
 
@@ -328,6 +329,54 @@ def buildXML(filename, roads, pretty):
                     p.set("y", format_coord(n[0]))
                     p.set("z", format_coord(0.0))
         
+        # Junctions
+        # OSM draws junctions as a shared node between ways
+
+        for road in roads:
+            if r == road:
+                continue
+
+            for n in r.nodes:
+                if n in road.nodes:
+                    if n not in junctions.keys():
+                        junctions[n] = set([])
+                    junctions[n].update([r, road]) 
+
+    for i, j in enumerate(junctions.keys()):
+        junc = etree.SubElement(root, "junction")
+        junc.set("id", str(i))
+        
+        junc_outline = etree.SubElement(junc, "outline")
+        point = np.array(utm.from_latlon(j.lat, j.lng)[0:2])
+        v = np.array([lane_width, 0])
+        # This is probably a bit unnecessary as its the same in every iteration
+        outline = list(map(lambda x: rotate_vector(x[1], x[0]*math.pi/4), enumerate([v]*4))) + point
+        for c in outline:
+            p = utm.to_latlon(c[0], c[1], utmz["zone"], utmz["letter"])
+            cb = etree.SubElement(junc_outline, "cornerGlobal")
+            cb.set("x", format_coord(p[1]))
+            cb.set("y", format_coord(p[0]))
+            cb.set("z", format_coord(0.0))
+
+        # Generate connecting roads
+        vecs = []
+        for r in junctions[j]:
+            n_i = r.nodes.index(j)
+            p = [j.lat, j.lng]
+            if n_i == 0:
+                p2 = [r.nodes[1].lat, r.nodes[1].lng]
+                vecs.append(np.array([p2[0]-p[0], p2[1]-p[1]]))
+            elif n_i == len(r.nodes)-1:
+                p2 = [r.nodes[-2].lat, r.nodes[-2].lng]
+                vecs.append(np.array([p2[0]-p[0], p2[1]-p[1]]))
+            else:
+                p0 = [r.nodes[n_i-1].lat, r.nodes[n_i-1].lng]
+                p1 = [r.nodes[n_i+1].lat, r.nodes[n_i+1].lng]
+                
+                vecs.append(np.array([p1[0]-p[0], p1[1]-p[1]]))
+                vecs.append(np.array([p0[0]-p[0], p0[0]-p[0]]))
+            
+
     header.set("north", format_coord(max_coord[0]))
     header.set("south", format_coord(max_coord[1]))
     header.set("east", format_coord(max_coord[2]))
@@ -360,6 +409,11 @@ def vector_angle(v1, v2):
 
     return np.arctan2(det, dot)
 
+def rotate_vector(vector, angle):
+    v_x = math.cos(angle) * vector[0] - math.sin(angle) * vector[1]
+    v_y = math.sin(angle) * vector[0] + math.cos(angle) * vector[1]
+    return [v_x, v_y]
+
 def find_parallel(road, width, left):
     points = []
 
@@ -390,9 +444,7 @@ def find_parallel(road, width, left):
             angle = -angle/2.0
 
             # Make a new point based on the second vector and the calculated angle
-            v_x = math.cos(angle) * v[0] - math.sin(angle) * v[1]
-            v_y = math.sin(angle) * v[0] + math.cos(angle) * v[1]
-            lv = np.array([v_x, v_y])
+            lv = np.array(rotate_vector(v, angle))
 
             # Scale width to maintain the lane width at sharp angles
             scaled_width = abs(width/np.sin(angle))
@@ -419,7 +471,7 @@ def find_parallel(road, width, left):
             l = width*lv/np.linalg.norm(lv)
             lp = (p2[0] + l[0], p2[1] + l[1])
 
-            lp = utm.to_latlon(lp[0], lp[1], 32, 'V')
+            lp = utm.to_latlon(lp[0], lp[1], utmz["zone"], utmz["letter"])
             parallel.append(lp)
     
     return parallel
