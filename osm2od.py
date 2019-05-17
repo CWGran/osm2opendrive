@@ -359,23 +359,177 @@ def buildXML(filename, roads, pretty):
             cb.set("z", format_coord(0.0))
 
         # Generate connecting roads
+        # Horrible code incoming
         vecs = []
         for r in junctions[j]:
             n_i = r.nodes.index(j)
-            p = [j.lat, j.lng]
+            p = utm.from_latlon(j.lat, j.lng)
             if n_i == 0:
-                p2 = [r.nodes[1].lat, r.nodes[1].lng]
-                vecs.append(np.array([p2[0]-p[0], p2[1]-p[1]]))
+                p2 = utm.from_latlon(r.nodes[1].lat, r.nodes[1].lng)
+                vecs.append({"vec" : np.array([p2[0]-p[0], p2[1]-p[1]]), "road" : r })
             elif n_i == len(r.nodes)-1:
-                p2 = [r.nodes[-2].lat, r.nodes[-2].lng]
-                vecs.append(np.array([p2[0]-p[0], p2[1]-p[1]]))
+                p2 = utm.from_latlon(r.nodes[-2].lat, r.nodes[-2].lng)
+                vecs.append({"vec" : np.array([p2[0]-p[0], p2[1]-p[1]]), "road" : r })
             else:
-                p0 = [r.nodes[n_i-1].lat, r.nodes[n_i-1].lng]
-                p1 = [r.nodes[n_i+1].lat, r.nodes[n_i+1].lng]
+                p0 = utm.from_latlon(r.nodes[n_i-1].lat, r.nodes[n_i-1].lng)
+                p1 = utm.from_latlon(r.nodes[n_i+1].lat, r.nodes[n_i+1].lng)
                 
-                vecs.append(np.array([p1[0]-p[0], p1[1]-p[1]]))
-                vecs.append(np.array([p0[0]-p[0], p0[0]-p[0]]))
+                vecs.append({"vec" : np.array([p1[0]-p[0], p1[1]-p[1]]), "road" : r })
+                vecs.append({"vec" : np.array([p0[0]-p[0], p0[1]-p[1]]), "road" : r })
+
+        for v in vecs:
+            v["vec"] = v["vec"]*lane_width/np.linalg.norm(v["vec"])
+
+        conn_roads = []
+        v = 0
+        while v  < len(vecs)-1:
+            v2 = v+1
+            while v2 < len(vecs):
+                v3 = vecs[v2]["vec"]-vecs[v]["vec"]
+                if v3[0] != 0 and v3[1] != 0:
+                    conn_roads.append({"vecs" : [vecs[v]["vec"], v3], "start" : vecs[v]["road"], "end" : vecs[v2]["road"]})
+                v2 += 1
+            v += 1
+
+        conns = 0
+        for r_id, r in enumerate(conn_roads):
+            road = etree.SubElement(root, "road")
+            road.set("name", "connroad")
+            road_id = "conn_{}_{}".format(i, str(r_id))
+            road.set("id", road_id)
+            road.set("junction", str(i))
+
+            points = [point+r["vecs"][0], point+r["vecs"][0]+r["vecs"][1]]
+            points = list(map(lambda x: utm.to_latlon(x[0], x[1], utmz["zone"], utmz["letter"]), points))
+
+            road_geo_link = etree.SubElement(road, "link")
+            rgl_pre = etree.SubElement(road_geo_link, "predecessor")
+            rgl_pre.set("elementType", "road")
+            rgl_pre.set("elementId", r["start"].id)
+            rgl_pre.set("contactPoint", "start")
+
+            rgl_succ = etree.SubElement(road_geo_link, "successor")
+            rgl_succ.set("elementType", "road")
+            rgl_succ.set("elementId", r["end"].id)
+            rgl_succ.set("contactPoint", "end")
             
+            # TODO: Connect the incoming roads to the connecting road:
+            # results = root.xpath("//road[@id = '{}']".format(r["start"].id))
+            # results = root.xpath("//road[@id = '{}']".format(r["end"].id))
+
+            lanes = etree.SubElement(road, "lanes")
+            lane_sec = etree.SubElement(lanes, "laneSection")
+            lane_sec.set("singleSide", "true")
+            
+            left_boundary_points = find_parallel(points, lane_width/2, True)
+            right_boundary_points = find_parallel(points, lane_width/2, False)
+
+            ls_right_boundary = etree.SubElement(lane_sec, "boundaries")
+            ls_right_boundary.set("type", "rightBoundary")
+
+            ls_right_boundary_geo = etree.SubElement(ls_right_boundary, "geometry")
+            lslb_geo_ps = etree.SubElement(ls_right_boundary_geo, "pointSet")
+
+            for p in right_boundary_points:
+                ps_point = etree.SubElement(lslb_geo_ps, "point")
+                ps_point.set("x", format_coord(p[1]))
+                ps_point.set("y", format_coord(p[0]))
+                ps_point.set("z", format_coord(0.0))
+
+            ls_left_boundary = etree.SubElement(lane_sec, "boundaries")
+            ls_left_boundary.set("type", "leftBoundary")
+
+            ls_left_boundary_geo = etree.SubElement(ls_left_boundary, "geometry")
+            lslb_geo_ps = etree.SubElement(ls_left_boundary_geo, "pointSet")
+
+            for p in left_boundary_points:
+                ps_point = etree.SubElement(lslb_geo_ps, "point")
+                ps_point.set("x", format_coord(p[1]))
+                ps_point.set("y", format_coord(p[0]))
+                ps_point.set("z", format_coord(0.0))
+
+            center = etree.SubElement(lane_sec, "center")
+            center_lane = etree.SubElement(center, "lane")
+            center_lane.set("id", str(0))
+            center_lane.set("uid", "{}_0".format(road_id))
+            center_lane.set("type", "none")
+
+            center_lane_border = etree.SubElement(center_lane, "border")
+            center_lane_border.set("virtual", "TRUE")
+
+            center_geo = etree.SubElement(center_lane_border, "geometry")
+            center_geo.set("sOffset", str(0))
+            center_geo.set("x", format_coord(left_boundary_points[0][1]))
+            center_geo.set("y", format_coord(left_boundary_points[0][0]))
+            center_geo.set("z", format_coord(0.0))
+            center_geo.set("length", str(road_length(left_boundary_points)))
+            
+            center_geo_ps = etree.SubElement(center_geo, "pointSet")
+
+            for p in left_boundary_points:
+                cg_point = etree.SubElement(center_geo_ps, "point")
+                cg_point.set("x", format_coord(p[1]))
+                cg_point.set("y", format_coord(p[0]))
+                cg_point.set("z", format_coord(0.0))
+
+            right = etree.SubElement(lane_sec, "right")
+            right_lane = etree.SubElement(right, "lane")
+            right_lane.set("id", str(-1))
+            right_lane.set("uid", "{}_11".format(road_id))
+            right_lane.set("type", "driving")
+            right_lane.set("direction", "bidirection")
+            right_lane.set("turnType", "noTurn")
+
+            right_lane_cl = etree.SubElement(right_lane, "centerLine")
+
+            right_geo = etree.SubElement(right_lane_cl, "geometry")
+            right_geo.set("sOffset", str(0))
+            right_geo.set("x", format_coord(points[0][1]))
+            right_geo.set("y", format_coord(points[0][0]))
+            right_geo.set("z", format_coord(0.0))
+            right_geo.set("length", str(road_length(points)))
+            
+            right_geo_ps = etree.SubElement(right_geo, "pointSet")
+
+            for p in points:
+                rg_point = etree.SubElement(right_geo_ps, "point")
+                rg_point.set("x", format_coord(p[1]))
+                rg_point.set("y", format_coord(p[0]))
+                rg_point.set("z", format_coord(0.0))
+
+            right_lane_border = etree.SubElement(right_lane, "border")
+            right_lane_border.set("virtual", "TRUE")
+
+            right_border_geo = etree.SubElement(right_lane_border, "geometry")
+            right_border_geo.set("sOffset", str(0))
+            right_border_geo.set("x", format_coord(right_boundary_points[0][1]))
+            right_border_geo.set("y", format_coord(right_boundary_points[0][0]))
+            right_border_geo.set("z", format_coord(0.0))
+            right_border_geo.set("length", str(road_length(right_boundary_points)))
+            
+            right_border_geo_ps = etree.SubElement(right_border_geo, "pointSet")
+
+            for p in right_boundary_points:
+                rg_point = etree.SubElement(right_border_geo_ps, "point")
+                rg_point.set("x", format_coord(p[1]))
+                rg_point.set("y", format_coord(p[0]))
+                rg_point.set("z", format_coord(0.0))
+
+            conn = etree.SubElement(junc, "connection")
+            conn.set("id", str(conns))
+            conn.set("incomingRoad", str(r["start"].id))
+            conn.set("connectingRoad", str(road_id))
+            conn.set("contactPoint", "start")
+
+            conns += 1
+
+            conn = etree.SubElement(junc, "connection")
+            conn.set("id", str(conns))
+            conn.set("incomingRoad", str(r["end"].id))
+            conn.set("connectingRoad", str(road_id))
+            conn.set("contactPoint", "end")
+
+            conns += 1
 
     header.set("north", format_coord(max_coord[0]))
     header.set("south", format_coord(max_coord[1]))
@@ -418,7 +572,10 @@ def find_parallel(road, width, left):
     points = []
 
     for n in road:
-        points.append((n.lat, n.lng))
+        if isinstance(n, Node):
+            points.append((n.lat, n.lng))
+        else:
+            points.append(n)
 
     points = np.array(points)
     vectors = []
