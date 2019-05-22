@@ -328,6 +328,41 @@ def buildXML(filename, roads, pretty):
                     p.set("x", format_coord(n[1]))
                     p.set("y", format_coord(n[0]))
                     p.set("z", format_coord(0.0))
+
+            # Sample Associations
+            # Distance from the center to the edges
+            right_sample = etree.SubElement(right_lane, "sampleAssociates")
+            right_road_sample = etree.SubElement(right_lane, "roadSampleAssociations")
+
+            if num_lanes > 1:
+                left_sample = etree.SubElement(left_lane, "sampleAssociates")
+                left_road_sample = etree.SubElement(left_lane, "roadSampleAssociations")
+
+            road_len = road_length(r.nodes)
+            for s in range(len(r.nodes)):
+                s_pos = road_len/len(r.nodes) * s
+                right_samp = etree.SubElement(right_sample, "sampleAssociate")
+                right_samp.set("sOffset", str(int(s_pos)))
+                right_samp.set("leftWidth", str(lane_width/2))
+                right_samp.set("rightWidth", str(lane_width/2))
+
+                far_boundary = (num_lanes//2 + i + 0.5) * lane_width
+                close_boundary = (math.ceil(num_lanes/2) - (i + 1) + 0.5) * lane_width
+                right_road_samp = etree.SubElement(right_road_sample, "sampleAssociation")
+                right_road_samp.set("sOffset", str(int(s_pos)))
+                right_road_samp.set("leftWidth", str(far_boundary))
+                right_road_samp.set("rightWidth", str(close_boundary))
+
+                if num_lanes > 1:
+                    left_samp = etree.SubElement(left_sample, "sampleAssociate")
+                    left_samp.set("sOffset", str(int(s_pos)))
+                    left_samp.set("leftWidth", str(lane_width/2))
+                    left_samp.set("rightWidth", str(lane_width/2))
+
+                    left_road_samp = etree.SubElement(left_road_sample, "sampleAssociation")
+                    left_road_samp.set("sOffset", str(int(s_pos)))
+                    left_road_samp.set("leftWidth", str(close_boundary))
+                    left_road_samp.set("rightWidth", str(far_boundary))
         
         # Junctions
         # OSM draws junctions as a shared node between ways
@@ -393,6 +428,8 @@ def buildXML(filename, roads, pretty):
 
         conns = 0
         for r_id, r in enumerate(conn_roads):
+            if r["start"] == r["end"]:
+                continue
             road = etree.SubElement(root, "road")
             road.set("name", "connroad")
             road_id = "conn_{}_{}".format(i, str(r_id))
@@ -400,6 +437,10 @@ def buildXML(filename, roads, pretty):
             road.set("junction", str(i))
 
             points = [point+r["vecs"][0], point+r["vecs"][0]+r["vecs"][1]]
+            
+            # Make curve
+            center = np.array(utm.from_latlon(j.lat, j.lng)[:2])
+            points = list(map(lambda x: points[0] + x, np.array(make_curve(np.array([0, 0]), center - points[0], points[1] - points[0]))))
             points = list(map(lambda x: utm.to_latlon(x[0], x[1], utmz["zone"], utmz["letter"]), points))
 
             road_geo_link = etree.SubElement(road, "link")
@@ -515,6 +556,22 @@ def buildXML(filename, roads, pretty):
                 rg_point.set("y", format_coord(p[0]))
                 rg_point.set("z", format_coord(0.0))
 
+            right_sample = etree.SubElement(right_lane, "sampleAssociates")
+            right_road_sample = etree.SubElement(right_lane, "roadSampleAssociations")
+
+            road_len = road_length(points)
+            for s in range(len(points)):
+                s_pos = road_len/len(points) * s
+                right_samp = etree.SubElement(right_sample, "sampleAssociate")
+                right_samp.set("sOffset", str(int(s_pos)))
+                right_samp.set("leftWidth", str(lane_width/2))
+                right_samp.set("rightWidth", str(lane_width/2))
+
+                right_road_samp = etree.SubElement(right_road_sample, "sampleAssociation")
+                right_road_samp.set("sOffset", str(int(s_pos)))
+                right_road_samp.set("leftWidth", str(lane_width/2))
+                right_road_samp.set("rightWidth", str(lane_width/2))
+
             conn = etree.SubElement(junc, "connection")
             conn.set("id", str(conns))
             conn.set("incomingRoad", str(r["start"].id))
@@ -567,6 +624,18 @@ def rotate_vector(vector, angle):
     v_x = math.cos(angle) * vector[0] - math.sin(angle) * vector[1]
     v_y = math.sin(angle) * vector[0] + math.cos(angle) * vector[1]
     return [v_x, v_y]
+
+def curve (A, B, C, t):
+    P0 = A * t + (1 - t) * B
+    P1 = B * t + (1 - t) * C
+    return P0 * t + (1 - t) * P1
+
+def make_curve(p1, p2, p3):
+    crv_line = []
+    for x in np.linspace(0,1,10):
+        crv_line.append(curve(p1, p2, p3, x))
+    return crv_line
+    
 
 def find_parallel(road, width, left):
     points = []
