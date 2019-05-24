@@ -97,7 +97,6 @@ def buildXML(filename, roads, pretty):
 
     # Setup Geo Reference
     georef = etree.SubElement(header, "geoReference")
-    # TODO: Get CDATA working with ElementTree, or switch to lxml.etree
     georef.text = etree.CDATA("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
 
     junctions = {}
@@ -131,6 +130,8 @@ def buildXML(filename, roads, pretty):
             num_lanes -= 1
         elif num_lanes == 0:
             num_lanes = 1
+
+        setattr(r, "lanes", num_lanes)
 
         # Lane boundaries
         left_boundary = etree.SubElement(boundaries, "boundary")
@@ -383,9 +384,9 @@ def buildXML(filename, roads, pretty):
         
         junc_outline = etree.SubElement(junc, "outline")
         point = np.array(utm.from_latlon(j.lat, j.lng)[0:2])
-        v = np.array([lane_width, 0])
+        v = np.array([2*lane_width, 0])
         # This is probably a bit unnecessary as its the same in every iteration
-        outline = list(map(lambda x: rotate_vector(x[1], x[0]*math.pi/4), enumerate([v]*4))) + point
+        outline = list(map(lambda x: rotate_vector(x[1], x[0]*math.pi/2), enumerate([v]*4))) + point
         for c in outline:
             p = utm.to_latlon(c[0], c[1], utmz["zone"], utmz["letter"])
             cb = etree.SubElement(junc_outline, "cornerGlobal")
@@ -401,16 +402,16 @@ def buildXML(filename, roads, pretty):
             p = utm.from_latlon(j.lat, j.lng)
             if n_i == 0:
                 p2 = utm.from_latlon(r.nodes[1].lat, r.nodes[1].lng)
-                vecs.append({"vec" : np.array([p2[0]-p[0], p2[1]-p[1]]), "road" : r })
+                vecs.append({"vec" : np.array([p2[0]-p[0], p2[1]-p[1]]), "road" : r , "pos" : -2})
             elif n_i == len(r.nodes)-1:
                 p2 = utm.from_latlon(r.nodes[-2].lat, r.nodes[-2].lng)
-                vecs.append({"vec" : np.array([p2[0]-p[0], p2[1]-p[1]]), "road" : r })
+                vecs.append({"vec" : np.array([p2[0]-p[0], p2[1]-p[1]]), "road" : r , "pos" : 2})
             else:
                 p0 = utm.from_latlon(r.nodes[n_i-1].lat, r.nodes[n_i-1].lng)
                 p1 = utm.from_latlon(r.nodes[n_i+1].lat, r.nodes[n_i+1].lng)
                 
-                vecs.append({"vec" : np.array([p1[0]-p[0], p1[1]-p[1]]), "road" : r })
-                vecs.append({"vec" : np.array([p0[0]-p[0], p0[1]-p[1]]), "road" : r })
+                vecs.append({"vec" : np.array([p1[0]-p[0], p1[1]-p[1]]), "road" : r , "pos" : 1})
+                vecs.append({"vec" : np.array([p0[0]-p[0], p0[1]-p[1]]), "road" : r , "pos" : -1})
 
         for v in vecs:
             v["vec"] = v["vec"]*lane_width/np.linalg.norm(v["vec"])
@@ -422,13 +423,13 @@ def buildXML(filename, roads, pretty):
             while v2 < len(vecs):
                 v3 = vecs[v2]["vec"]-vecs[v]["vec"]
                 if v3[0] != 0 and v3[1] != 0:
-                    conn_roads.append({"vecs" : [vecs[v]["vec"], v3], "start" : vecs[v]["road"], "end" : vecs[v2]["road"]})
+                    conn_roads.append({"vecs" : [vecs[v]["vec"], v3], "start" : {"road" : vecs[v]["road"], "pos" : vecs[v]["pos"]}, "end" : {"road" : vecs[v2]["road"], "pos" : vecs[v2]["pos"]}})
                 v2 += 1
             v += 1
 
         conns = 0
         for r_id, r in enumerate(conn_roads):
-            if r["start"] == r["end"]:
+            if r["start"]["road"] == r["end"]["road"]:
                 continue
             road = etree.SubElement(root, "road")
             road.set("name", "connroad")
@@ -446,17 +447,60 @@ def buildXML(filename, roads, pretty):
             road_geo_link = etree.SubElement(road, "link")
             rgl_pre = etree.SubElement(road_geo_link, "predecessor")
             rgl_pre.set("elementType", "road")
-            rgl_pre.set("elementId", r["start"].id)
-            rgl_pre.set("contactPoint", "start")
+            rgl_pre.set("elementId", r["start"]["road"].id)
+            rgl_pre.set("contactPoint", "start" if r["start"]["pos"] < 0 else "end")
 
             rgl_succ = etree.SubElement(road_geo_link, "successor")
             rgl_succ.set("elementType", "road")
-            rgl_succ.set("elementId", r["end"].id)
-            rgl_succ.set("contactPoint", "end")
+            rgl_succ.set("elementId", r["end"]["road"].id)
+            rgl_succ.set("contactPoint", "end" if r["start"]["pos"] > 0 else "start")
             
             # TODO: Connect the incoming roads to the connecting road:
-            # results = root.xpath("//road[@id = '{}']".format(r["start"].id))
-            # results = root.xpath("//road[@id = '{}']".format(r["end"].id))
+            if abs(r["start"]["pos"]) > 1:
+                start_road = root.xpath("//road[@id = '{}']".format(r["start"]["road"].id))[0]
+                start_link = start_road.findall("link")
+                if len(start_road.findall("link")) == 0:
+                    start_link = etree.SubElement(start_road, "link")
+                else:
+                    start_link = start_link[0]
+                if abs(r["start"]["pos"]) > 0:
+                    succ = etree.SubElement(start_link, "successor" if r["start"]["pos"] < 0 else "predecessor")
+                    succ.set("elementType", "road")
+                    succ.set("elementId", road_id)
+                    succ.set("contactPoint", "start")
+
+                sr_lanes = start_road.xpath(".//left/lane | .//right/lane")
+                for lane in sr_lanes:
+                    sr_lane_link = lane.findall("link")
+                    if len(sr_lane_link) == 0:
+                        sr_lane_link = etree.SubElement(lane, "link")
+                    else:
+                        sr_lane_link = sr_lane_link[0]
+                    sr_link = etree.SubElement(sr_lane_link, "successor" if r["start"]["pos"] < 0 else "predecessor") 
+                    sr_link.set("id", "{}_11".format(road_id))
+
+            if abs(r["end"]["pos"]) > 1:
+                end_road = root.xpath("//road[@id = '{}']".format(r["end"]["road"].id))[0]
+                end_link = end_road.findall("link")
+                if len(end_road.findall("link")) == 0:
+                    end_link = etree.SubElement(end_road, "link")
+                else:
+                    end_link = end_link[0]
+                if abs(r["end"]["pos"]) > 0:
+                    succ = etree.SubElement(end_link, "predecessor" if r["end"]["pos"] > 0 else "successor")
+                    succ.set("elementType", "road")
+                    succ.set("elementId", road_id)
+                    succ.set("contactPoint", "end")
+
+                er_lanes = end_road.xpath(".//left/lane | .//right/lane")
+                for lane in sr_lanes:
+                    er_lane_link = lane.findall("link")
+                    if len(er_lane_link) == 0:
+                        er_lane_link = etree.SubElement(lane, "link")
+                    else:
+                        er_lane_link = er_lane_link[0]
+                    er_link = etree.SubElement(er_lane_link, "predecessor" if r["end"]["pos"] > 0 else "successor") 
+                    er_link.set("id", "{}_11".format(road_id))
 
             lanes = etree.SubElement(road, "lanes")
             lane_sec = etree.SubElement(lanes, "laneSection")
@@ -574,17 +618,37 @@ def buildXML(filename, roads, pretty):
 
             conn = etree.SubElement(junc, "connection")
             conn.set("id", str(conns))
-            conn.set("incomingRoad", str(r["start"].id))
+            conn.set("incomingRoad", str(r["start"]["road"].id))
             conn.set("connectingRoad", str(road_id))
             conn.set("contactPoint", "start")
+
+            for l in range(math.ceil(r["start"]["road"].lanes/2)):
+                conn_s_link = etree.SubElement(conn, "laneLink")
+                conn_s_link.set("from", str(-(l+1)))
+                conn_s_link.set("to", str(-1))
+
+                if r["start"]["road"].lanes > 1:
+                    conn_sl_link = etree.SubElement(conn, "laneLink")
+                    conn_sl_link.set("from", str(l+1))
+                    conn_sl_link.set("to", str(-1))
 
             conns += 1
 
             conn = etree.SubElement(junc, "connection")
             conn.set("id", str(conns))
-            conn.set("incomingRoad", str(r["end"].id))
+            conn.set("incomingRoad", str(r["end"]["road"].id))
             conn.set("connectingRoad", str(road_id))
             conn.set("contactPoint", "end")
+
+            for l in range(math.ceil(r["end"]["road"].lanes/2)):
+                conn_s_link = etree.SubElement(conn, "laneLink")
+                conn_s_link.set("from", str(-(l+1)))
+                conn_s_link.set("to", str(-1))
+
+                if r["end"]["road"].lanes > 1:
+                    conn_sl_link = etree.SubElement(conn, "laneLink")
+                    conn_sl_link.set("from", str(l+1))
+                    conn_sl_link.set("to", str(-1))
 
             conns += 1
 
@@ -708,7 +772,7 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('file', help="Input filename")
-    parser.add_argument('--zone', '-z', action="store", type=str)
+    parser.add_argument('--zone', '-z', action="store", type=str, help="UTM zone, example: -z 32V")
     parser.add_argument('--pretty', '-p', action='store_true', help="Prettify output")
     parser.set_defaults(pretty=False)
 
