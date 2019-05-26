@@ -67,10 +67,28 @@ def readOSM(filename):
 
     return nodes, roads
 
+def read_config(filename):
+    f = open(filename)
+    conf = {}
+    for l in f:
+        s = l.strip().split(",")
+        s[0] = s[0].lower().replace(" ", "")
+        if s[1] != "":
+            s[1] = int(s[1])
+        else:
+            s[1] = None
+        if s[2] != "":
+            s[2] = float(s[2])
+        else:
+            s[2] = None
+        conf[s[0]] = s[1:3]
+    f.close()
+    return conf
+
 def format_coord(n):
     return "{:.9e}".format(n)
 
-def buildXML(filename, roads, pretty):
+def buildXML(filename, roads, pretty, conf):
 
     name = filename.split(".")[0].split("/")[-1]
     #filename = name + ".xml"
@@ -103,8 +121,17 @@ def buildXML(filename, roads, pretty):
     for r in tqdm(roads):
         road = etree.SubElement(root, "road")
 
+        num_lanes = 1
+        lane_width = 3.0
         if hasattr(r, "name"):
             road.set("name", r.name)
+
+            name = r.name.lower().replace(" ", "")
+            if name in conf.keys():
+                if conf[name][0] != None:
+                    num_lanes = conf[name][0]
+                if conf[name][1] != None:
+                    lane_width = conf[name][1]
         else:
             road.set("name", "")
 
@@ -115,8 +142,6 @@ def buildXML(filename, roads, pretty):
         # Lanes
         lanes = etree.SubElement(road, "lanes")
 
-        num_lanes = 1
-        lane_width = 3.0
         if hasattr(r, "lanes"):
             num_lanes = int(r.lanes)
 
@@ -493,7 +518,7 @@ def buildXML(filename, roads, pretty):
                     succ.set("contactPoint", "end")
 
                 er_lanes = end_road.xpath(".//left/lane | .//right/lane")
-                for lane in sr_lanes:
+                for lane in er_lanes:
                     er_lane_link = lane.findall("link")
                     if len(er_lane_link) == 0:
                         er_lane_link = etree.SubElement(lane, "link")
@@ -772,6 +797,7 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('file', help="Input filename")
+    parser.add_argument('--config', '-c', help="Manually set lane numbers and widths based on road names")
     parser.add_argument('--zone', '-z', action="store", type=str, help="UTM zone, example: -z 32V")
     parser.add_argument('--pretty', '-p', action='store_true', help="Prettify output")
     parser.set_defaults(pretty=False)
@@ -797,8 +823,12 @@ def main():
         except (TypeError, ValueError) as e:
             print("Erroneous UTM zone \"{}\", using default \"{}\".".format(args.zone, utmz["full"]))
 
+    if args.config:
+        conf = read_config(args.config)
+    else:
+        conf = None
     nodes, roads = readOSM(filename)
-    buildXML(filename, roads, args.pretty)
+    buildXML(filename, roads, args.pretty, conf)
 
 if __name__ == "__main__":
     main()
