@@ -127,11 +127,12 @@ def buildXML(filename, roads, pretty, conf):
             road.set("name", r.name)
 
             name = r.name.lower().replace(" ", "")
-            if name in conf.keys():
-                if conf[name][0] != None:
-                    num_lanes = conf[name][0]
-                if conf[name][1] != None:
-                    lane_width = conf[name][1]
+            if conf != None:
+                if name in conf.keys():
+                    if conf[name][0] != None:
+                        num_lanes = conf[name][0]
+                    if conf[name][1] != None:
+                        lane_width = conf[name][1]
         else:
             road.set("name", "")
 
@@ -535,15 +536,17 @@ def buildXML(filename, roads, pretty, conf):
             end_width = lane_width
             if hasattr(r["start"]["road"], "name"):
                 start_name = r["start"]["road"].name.lower().replace(" ", "")
-                if start_name in conf.keys():
-                    if conf[start_name][1] != None:
-                        start_width = conf[start_name][1]
+                if conf != None:
+                    if start_name in conf.keys():
+                        if conf[start_name][1] != None:
+                            start_width = conf[start_name][1]
 
             if hasattr(r["end"]["road"], "name") :
                 end_name = r["end"]["road"].name.lower().replace(" ", "")
-                if end_name in conf.keys():
-                    if conf[end_name][1] != None:
-                        end_width = conf[end_name][1]
+                if conf != None:
+                    if end_name in conf.keys():
+                        if conf[end_name][1] != None:
+                            end_width = conf[end_name][1]
 
             left_boundary_points = find_parallel(points, True, start_width/2, end_width/2)
             right_boundary_points = find_parallel(points, False, start_width/2, end_width/2)
