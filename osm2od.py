@@ -118,7 +118,7 @@ def buildXML(filename, roads, pretty, conf):
     georef.text = etree.CDATA("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
 
     junctions = {}
-    for r in tqdm(roads):
+    for r in tqdm(roads, "Generating roads"):
         road = etree.SubElement(root, "road")
 
         num_lanes = 1
@@ -404,7 +404,7 @@ def buildXML(filename, roads, pretty, conf):
                         junctions[n] = set([])
                     junctions[n].update([r, road]) 
 
-    for i, j in enumerate(junctions.keys()):
+    for i, j in tqdm(enumerate(junctions.keys()), "Generating junctions", len(junctions)):
         junc = etree.SubElement(root, "junction")
         junc.set("id", str(i))
         
@@ -817,9 +817,9 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('file', help="Input filename")
-    parser.add_argument('--config', '-c', help="Manually set lane numbers and widths based on road names")
-    parser.add_argument('--zone', '-z', action="store", type=str, help="UTM zone, example: -z 32V")
-    parser.add_argument('--pretty', '-p', action='store_true', help="Prettify output")
+    parser.add_argument('-c', '--config', help="Manually set lane numbers and widths based on road names")
+    parser.add_argument('-z', '--zone', action="store", type=str, help="UTM zone, example: -z 32V")
+    parser.add_argument('-p', '--pretty', action='store_true', help="Prettify output")
     parser.set_defaults(pretty=False)
 
     args = parser.parse_args()

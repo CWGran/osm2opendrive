@@ -8,18 +8,18 @@ This project aims to create a tool for generating maps in the Apollo version of 
 
 ## Usage
 ```
-usage: osm2od.py [-h] [--config CONFIG] [--zone ZONE] [--pretty] file
+usage: osm2od.py [-h] [-c CONFIG] [-z ZONE] [-p] file
 
 positional arguments:
   file                  Input filename
 
 optional arguments:
   -h, --help            show this help message and exit
-  --config CONFIG, -c CONFIG
+  -c CONFIG, --config CONFIG
                         Manually set lane numbers and widths based on road
                         names
-  --zone ZONE, -z ZONE  UTM zone, example: -z 32V
-  --pretty, -p          Prettify output
+  -z ZONE, --zone ZONE  UTM zone, example: -z 32V
+  -p, --pretty          Prettify output
 ```
 
 ### Example config
