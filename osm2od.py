@@ -843,7 +843,7 @@ def main():
         try:
             gz = args.zone
             utmz["zone"] = int(gz[0:-1])
-            utmz["letter"] = upper(str(gz[-1]))
+            utmz["letter"] = str(gz[-1]).upper()
             utmz["full"] = gz
 
             if utmz["zone"] > 60 or utmz["zone"] < 1:
