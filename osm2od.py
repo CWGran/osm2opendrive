@@ -481,9 +481,9 @@ def buildXML(filename, roads, pretty, conf):
             rgl_succ.set("elementId", r["end"]["road"].id)
             rgl_succ.set("contactPoint", "end" if r["start"]["pos"] > 0 else "start")
             
-            # TODO: Connect the incoming roads to the connecting road:
+            conn_link = etree.Element("link")
+            start_road = root.xpath("//road[@id = '{}']".format(r["start"]["road"].id))[0]
             if abs(r["start"]["pos"]) > 1:
-                start_road = root.xpath("//road[@id = '{}']".format(r["start"]["road"].id))[0]
                 start_link = start_road.findall("link")
                 if len(start_road.findall("link")) == 0:
                     start_link = etree.SubElement(start_road, "link")
@@ -505,8 +505,13 @@ def buildXML(filename, roads, pretty, conf):
                     sr_link = etree.SubElement(sr_lane_link, "successor" if r["start"]["pos"] < 0 else "predecessor") 
                     sr_link.set("id", "{}_11".format(road_id))
 
+            sr_lanes = start_road.xpath(".//left/lane | .//right/lane")
+            for lane in sr_lanes:
+                conn_sr_link = etree.SubElement(conn_link, "predecessor")
+                conn_sr_link.set("id", lane.get("uid"))
+
+            end_road = root.xpath("//road[@id = '{}']".format(r["end"]["road"].id))[0]
             if abs(r["end"]["pos"]) > 1:
-                end_road = root.xpath("//road[@id = '{}']".format(r["end"]["road"].id))[0]
                 end_link = end_road.findall("link")
                 if len(end_road.findall("link")) == 0:
                     end_link = etree.SubElement(end_road, "link")
@@ -527,6 +532,11 @@ def buildXML(filename, roads, pretty, conf):
                         er_lane_link = er_lane_link[0]
                     er_link = etree.SubElement(er_lane_link, "predecessor" if r["end"]["pos"] > 0 else "successor") 
                     er_link.set("id", "{}_11".format(road_id))
+
+            er_lanes = end_road.xpath(".//left/lane | .//right/lane")
+            for lane in er_lanes:
+                    conn_er_link = etree.SubElement(conn_link, "successor")
+                    conn_er_link.set("id", lane.get("uid"))
 
             lanes = etree.SubElement(road, "lanes")
             lane_sec = etree.SubElement(lanes, "laneSection")
@@ -606,6 +616,8 @@ def buildXML(filename, roads, pretty, conf):
             right_lane.set("type", "driving")
             right_lane.set("direction", "bidirection")
             right_lane.set("turnType", "noTurn")
+
+            right_lane.insert(1, conn_link)
 
             right_lane_cl = etree.SubElement(right_lane, "centerLine")
 
