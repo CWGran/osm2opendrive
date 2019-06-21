@@ -38,7 +38,7 @@ def readRoads(e, nodes):
 
         # Read all information about each road
         for tag in road.findall('tag'):
-            setattr(r, tag.get("k"), tag.get("v"))
+            setattr(r, tag.get("k").replace(":", "_"), tag.get("v"))
 
             # Filter out unwanted roads
             if tag.get('k') == "highway":
@@ -142,9 +142,22 @@ def buildXML(filename, roads, pretty, conf):
 
         # Lanes
         lanes = etree.SubElement(road, "lanes")
+        
+        num_lanes = 0
+        lane_nums = [0,0]
+        if hasattr(r, "lanes_forward"):
+            lane_nums[0] = int(r.lanes_forward)
+        if hasattr(r, "lanes_backward"):
+            lane_nums[1] = int(r.lanes_backward)
 
         if hasattr(r, "lanes"):
-            num_lanes = int(r.lanes)
+            lane_nums[0] = int(r.lanes)//2 + int(r.lanes)%2
+            lane_nums[1] = int(r.lanes)//2
+
+        num_lanes = lane_nums[0] + lane_nums[1]
+        if num_lanes == 0:
+            lane_nums[0] = 1
+            num_lanes = 1
 
         laneSec = etree.SubElement(lanes, "laneSection")
         laneSec.set("singleSide", "true")          # True if both directions share the same laneSection
