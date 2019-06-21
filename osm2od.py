@@ -178,8 +178,8 @@ def buildXML(filename, roads, pretty, conf):
             nodes.append([n.lat, n.lng])
 
         if num_lanes == 1:
-            left_boundary_points = nodes
-            right_boundary_points = find_parallel(r.nodes, False, lane_width, lane_width)
+            left_boundary_points = find_parallel(r.nodes, True, lane_width/2, lane_width/2)
+            right_boundary_points = find_parallel(r.nodes, False, lane_width/2, lane_width/2)
         else:
             boundary_width = num_lanes/2.0 *lane_width
             left_boundary_points = find_parallel(r.nodes, True, boundary_width, boundary_width)
@@ -211,13 +211,18 @@ def buildXML(filename, roads, pretty, conf):
         #center_lane.set("turnType", "noTurn")   # Not sure what this means
 
         center_border = etree.SubElement(center_lane, "border")
-        center_border.set("virtual", "TRUE")
+        center_border.set("virtual", "FALSE")
         cl_geo = etree.SubElement(center_border, "geometry")
         cl_geo.set("sOffset", "0")
         cl_geo.set("x", format_coord(r.nodes[0].lng))
         cl_geo.set("y", format_coord(r.nodes[0].lat))
         cl_geo.set("z", format_coord(0.0))
         cl_geo.set("length", str(road_length(r.nodes)))
+
+        cborder_type = etree.SubElement(center_border, "borderType")
+        cborder_type.set("sOffset", "0")
+        cborder_type.set("type", "solid" if num_lanes == 1 else "broken")
+        cborder_type.set("color", "yellow")
 
         cl_geo_ps = etree.SubElement(cl_geo, "pointSet")
 
@@ -250,7 +255,8 @@ def buildXML(filename, roads, pretty, conf):
         if num_lanes > 1:
             left = etree.SubElement(laneSec, "left")
 
-        for i in range(math.ceil(num_lanes/2)):
+        num_side_lanes = math.ceil(num_lanes/2)
+        for i in range(num_side_lanes):
             # Right, only add this if num_lanes == 1
             right_lane = etree.SubElement(right, "lane")
             right_lane.set("id", "-{}".format(i+1))
@@ -285,7 +291,12 @@ def buildXML(filename, roads, pretty, conf):
 
             # Lane border
             right_border = etree.SubElement(right_lane, "border")
-            right_border.set("virtual", "TRUE")     # "Identify whether the lane boundary exists in real world"
+            right_border.set("virtual", "FALSE")     # "Identify whether the lane boundary exists in real world"
+
+            rborder_type = etree.SubElement(right_border, "borderType")
+            rborder_type.set("sOffset", "0")
+            rborder_type.set("type", "solid" if i == num_side_lanes-1 else "broken")
+            rborder_type.set("color", "yellow" if i == num_side_lanes-1 else "white")
 
             if num_lanes == 1:
                 right_border_points = find_parallel(r.nodes, False, lane_width/2.0, lane_width/2.0)
@@ -337,7 +348,12 @@ def buildXML(filename, roads, pretty, conf):
 
                 # Lane border
                 left_border = etree.SubElement(left_lane, "border")
-                left_border.set("virtual", "TRUE")     # "Identify whether the lane boundary exists in real world"
+                left_border.set("virtual", "FALSE")     # "Identify whether the lane boundary exists in real world"
+
+                lborder_type = etree.SubElement(left_border, "borderType")
+                lborder_type.set("sOffset", "0")
+                lborder_type.set("type", "solid" if i == num_side_lanes-1 else "broken")
+                lborder_type.set("color", "yellow" if i == num_side_lanes-1 else "white")
 
                 left_border_points = find_parallel(r.nodes, True, (i+1)*lane_width, (i+1)*lane_width)
 
@@ -594,6 +610,11 @@ def buildXML(filename, roads, pretty, conf):
             center_lane_border = etree.SubElement(center_lane, "border")
             center_lane_border.set("virtual", "TRUE")
 
+            cborder_type = etree.SubElement(center_lane_border, "borderType")
+            cborder_type.set("sOffset", "0")
+            cborder_type.set("type", "none")
+            cborder_type.set("color", "none")
+
             center_geo = etree.SubElement(center_lane_border, "geometry")
             center_geo.set("sOffset", str(0))
             center_geo.set("x", format_coord(left_boundary_points[0][1]))
@@ -638,6 +659,11 @@ def buildXML(filename, roads, pretty, conf):
 
             right_lane_border = etree.SubElement(right_lane, "border")
             right_lane_border.set("virtual", "TRUE")
+
+            rborder_type = etree.SubElement(right_lane_border, "borderType")
+            rborder_type.set("sOffset", "0")
+            rborder_type.set("type", "none")
+            rborder_type.set("color", "none")
 
             right_border_geo = etree.SubElement(right_lane_border, "geometry")
             right_border_geo.set("sOffset", str(0))
